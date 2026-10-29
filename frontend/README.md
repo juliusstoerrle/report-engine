@@ -25,8 +25,6 @@ provider) instance. Copy `.env.example` to `.env` and fill in `OIDC_ISSUER_URL`,
    to `ES384`.
 3. In the client's **Keys** tab, enable **Use JWKS URL** and set it to `https://<frontend-host>/auth/jwks`, which
    publishes only the public key. (Alternatively, import the public key/certificate there by hand.)
-4. Remove the old `OIDC_CLIENT_SECRET` from the deployment — it is no longer read (startup fails with a pointer to
-   the new variables if it is the only client credential set).
 
 To rotate, replace the key file and restart; the key id defaults to the key's JWK thumbprint, so Keycloak
 refetches the JWKS when it sees the new `kid`.

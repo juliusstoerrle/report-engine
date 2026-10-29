@@ -38,7 +38,7 @@ export interface AppConfig {
     readonly backendHost: string | undefined;
     readonly clientId: string;
     // PEM-encoded (PKCS#8 or SEC1) EC P-384 private key used to sign ES384
-    // private_key_jwt client assertions (see auth/client-key.ts) - replaces a client secret.
+    // private_key_jwt client assertions (see auth/client-key.ts).
     readonly clientPrivateKey: string;
     // Optional "kid" for the client key; defaults to its RFC 7638 JWK thumbprint.
     readonly clientKeyId: string | undefined;
@@ -95,12 +95,6 @@ function clientPrivateKeyFromEnv(env: NodeJS.ProcessEnv): string {
   if (inline) {
     // .env files and many secret stores can't hold real newlines - accept escaped "\n" too.
     return inline.replace(/\\n/g, '\n');
-  }
-  if (env.OIDC_CLIENT_SECRET) {
-    throw new Error(
-      'OIDC_CLIENT_SECRET is no longer supported - the frontend authenticates with a signed JWT ' +
-        '(private_key_jwt). Set OIDC_CLIENT_PRIVATE_KEY_FILE or OIDC_CLIENT_PRIVATE_KEY instead.',
-    );
   }
   throw new Error('Missing required environment variable: OIDC_CLIENT_PRIVATE_KEY_FILE or OIDC_CLIENT_PRIVATE_KEY');
 }

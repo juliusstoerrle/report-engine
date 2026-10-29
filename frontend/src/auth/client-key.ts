@@ -23,7 +23,7 @@ function jwkThumbprint(jwk: webcrypto.JsonWebKey): string {
 /**
  * Loads the PEM-encoded private key this app authenticates to the identity provider with
  * (OAuth "private_key_jwt" client authentication, RFC 7523 - called "Signed JWT" in
- * Keycloak), replacing a shared client secret: only the public key ever leaves this app.
+ * Keycloak): only the public key ever leaves this app.
  */
 export async function loadClientSigningKey(pem: string, kid?: string): Promise<ClientSigningKey> {
   const keyObject = createPrivateKey(pem);
