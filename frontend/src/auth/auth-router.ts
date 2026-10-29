@@ -10,6 +10,8 @@ import {
   randomState,
 } from 'openid-client';
 import { AppConfig } from '../config';
+import { ClientSigningKey } from './client-key';
+import { authenticateClient } from './oidc-client';
 import { claimsToPrincipal } from './claims-to-principal';
 import { fetchHitobitoRoles } from './hitobito-roles';
 import * as logger from '../telemetry/logger';
@@ -23,10 +25,19 @@ function safeReturnTo(value: unknown): string {
 
 export function createAuthRouter(
   configuration: Configuration,
+  clientKey: ClientSigningKey,
   config: AppConfig['auth'],
   hitobitoApiUrl: string,
 ): Router {
   const router = express.Router();
+
+  // Public key set for verifying this client's private_key_jwt assertions - register this URL as
+  // the client's JWKS URL in the identity provider (Keycloak: Credentials > "Signed JWT",
+  // Keys > "Use JWKS URL") so key rotation needs no manual re-upload.
+  router.get('/jwks', function (req: Request, res: Response) {
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json({ keys: [clientKey.publicJwk] });
+  });
 
   router.get('/login', async function (req: Request, res: Response) {
     const state = randomState();
@@ -74,18 +85,11 @@ export function createAuthRouter(
       if (!claims) {
         throw new Error('OIDC token response did not include an ID token');
       }
-      if (!config.clientSecret) {
-        // Identity Brokering API V2 requires a confidential client — this
-        // should never happen for mv-reports, which always has a secret.
-        throw new Error('OIDC_CLIENT_SECRET is required to fetch Hitobito roles via the broker token endpoint');
-      }
-
       const roles = await fetchHitobitoRoles(
         configuration.serverMetadata().issuer,
         config.brokerIdpAlias,
         hitobitoApiUrl,
-        config.clientId,
-        config.clientSecret,
+        (body) => authenticateClient(configuration, clientKey, body),
         tokens.access_token,
         config.backendHost,
       );

@@ -1,16 +1,17 @@
 import {
   allowInsecureRequests,
-  ClientSecretBasic,
+  ClientAuth,
   Configuration,
   customFetch,
   discovery,
   type DiscoveryRequestOptions,
-  None,
+  PrivateKeyJwt,
 } from 'openid-client';
 import { AppConfig } from '../config';
 import { withBackendHost } from './backend-host';
+import { ClientSigningKey } from './client-key';
 
-export async function createOidcClient(config: AppConfig['auth']): Promise<Configuration> {
+export async function createOidcClient(config: AppConfig['auth'], clientKey: ClientSigningKey): Promise<Configuration> {
   const issuerUrl = new URL(config.issuerUrl);
 
   const options: DiscoveryRequestOptions = {};
@@ -41,11 +42,33 @@ export async function createOidcClient(config: AppConfig['auth']): Promise<Confi
     };
   }
 
+  // private_key_jwt client authentication (RFC 7523): no shared client secret - each token
+  // request carries a short-lived assertion signed with clientKey, whose public half the
+  // identity provider fetches from GET /auth/jwks. Authorization Code + PKCE (S256) in
+  // auth-router.ts plus this asymmetric client authentication is the OAuth 2.1 profile.
   return discovery(
     issuerUrl,
     config.clientId,
-    config.clientSecret,
-    config.clientSecret ? ClientSecretBasic(config.clientSecret) : None(),
+    { token_endpoint_auth_method: 'private_key_jwt' },
+    clientAuthFor(clientKey),
     options,
   );
+}
+
+export function clientAuthFor(key: ClientSigningKey): ClientAuth {
+  return PrivateKeyJwt({ key: key.privateKey, kid: key.kid });
+}
+
+/**
+ * Adds a freshly signed client assertion (client_id, client_assertion_type, client_assertion)
+ * to a form body, for token-endpoint-style requests openid-client doesn't make itself (e.g.
+ * Keycloak's broker token endpoint) - the same assertion openid-client sends to the token endpoint.
+ */
+export async function authenticateClient(
+  configuration: Configuration,
+  key: ClientSigningKey,
+  body: URLSearchParams,
+): Promise<void> {
+  // ClientAuth is typed as returning void, but PrivateKeyJwt's implementation is async (it signs).
+  await clientAuthFor(key)(configuration.serverMetadata(), configuration.clientMetadata(), body, new Headers());
 }

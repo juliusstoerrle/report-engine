@@ -13,10 +13,16 @@ const ISSUER = 'http://localhost:7080/realms/bdp-login';
 const IDP_ALIAS = 'mv-oidc';
 const HITOBITO_URL = 'http://host.docker.internal:3000';
 const CLIENT_ID = 'mv-reports';
-const CLIENT_SECRET = 'test-secret';
+const CLIENT_ASSERTION = 'signed.client.assertion';
 const KEYCLOAK_ACCESS_TOKEN = 'kc-access-token';
 
 let fetchMock: jest.Mock;
+
+async function authenticateClient(body: URLSearchParams): Promise<void> {
+  body.set('client_id', CLIENT_ID);
+  body.set('client_assertion_type', 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer');
+  body.set('client_assertion', CLIENT_ASSERTION);
+}
 
 beforeEach(() => {
   fetchMock = jest.fn();
@@ -43,8 +49,7 @@ test('posts the broker token request and fetches userinfo with the returned acce
     ISSUER,
     IDP_ALIAS,
     HITOBITO_URL,
-    CLIENT_ID,
-    CLIENT_SECRET,
+    authenticateClient,
     KEYCLOAK_ACCESS_TOKEN,
     undefined,
   );
@@ -67,9 +72,10 @@ test('posts the broker token request and fetches userinfo with the returned acce
   expect(brokerInit.method).toBe('POST');
   expect(String(brokerInit.body)).toBe(
     new URLSearchParams({
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET,
       token: KEYCLOAK_ACCESS_TOKEN,
+      client_id: CLIENT_ID,
+      client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer',
+      client_assertion: CLIENT_ASSERTION,
     }).toString(),
   );
 
@@ -87,8 +93,7 @@ test('rewrites the broker token request to backendHost, not the userinfo request
     ISSUER,
     IDP_ALIAS,
     HITOBITO_URL,
-    CLIENT_ID,
-    CLIENT_SECRET,
+    authenticateClient,
     KEYCLOAK_ACCESS_TOKEN,
     'host.docker.internal:7080',
   );
@@ -106,7 +111,7 @@ test('throws when the broker token endpoint returns an error', async () => {
   );
 
   await expect(
-    fetchHitobitoRoles(ISSUER, IDP_ALIAS, HITOBITO_URL, CLIENT_ID, CLIENT_SECRET, KEYCLOAK_ACCESS_TOKEN, undefined),
+    fetchHitobitoRoles(ISSUER, IDP_ALIAS, HITOBITO_URL, authenticateClient, KEYCLOAK_ACCESS_TOKEN, undefined),
   ).rejects.toThrow(/invalid_client/);
 
   expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -116,7 +121,7 @@ test('throws when the broker response is ok but has no access_token', async () =
   fetchMock.mockResolvedValueOnce(jsonResponse({}));
 
   await expect(
-    fetchHitobitoRoles(ISSUER, IDP_ALIAS, HITOBITO_URL, CLIENT_ID, CLIENT_SECRET, KEYCLOAK_ACCESS_TOKEN, undefined),
+    fetchHitobitoRoles(ISSUER, IDP_ALIAS, HITOBITO_URL, authenticateClient, KEYCLOAK_ACCESS_TOKEN, undefined),
   ).rejects.toThrow();
 });
 
@@ -126,6 +131,6 @@ test('throws when the Hitobito userinfo request fails', async () => {
     .mockResolvedValueOnce(jsonResponse({}, false, 500));
 
   await expect(
-    fetchHitobitoRoles(ISSUER, IDP_ALIAS, HITOBITO_URL, CLIENT_ID, CLIENT_SECRET, KEYCLOAK_ACCESS_TOKEN, undefined),
+    fetchHitobitoRoles(ISSUER, IDP_ALIAS, HITOBITO_URL, authenticateClient, KEYCLOAK_ACCESS_TOKEN, undefined),
   ).rejects.toThrow(/userinfo/);
 });

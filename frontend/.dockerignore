@@ -14,3 +14,6 @@ npm-debug.log
 
 Dockerfile
 .dockerignore
+
+# OIDC client signing keys (OIDC_CLIENT_PRIVATE_KEY_FILE) - never commit or bake into the image
+*.pem

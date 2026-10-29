@@ -32,21 +32,21 @@ export async function fetchHitobitoRoles(
   issuer: string,
   brokerIdpAlias: string,
   hitobitoApiUrl: string,
-  clientId: string,
-  clientSecret: string,
+  // Adds this client's credentials to the request body (see auth/oidc-client.ts#authenticateClient) -
+  // the broker token endpoint authenticates the client like the token endpoint does.
+  authenticateClient: (body: URLSearchParams) => Promise<void>,
   keycloakAccessToken: string,
   backendHost: string | undefined,
 ): Promise<ReadonlyArray<PrincipalRole>> {
   const brokerTokenUrl = withBackendHost(new URL(`${issuer}/broker/${brokerIdpAlias}/token`), backendHost);
 
+  const body = new URLSearchParams({ token: keycloakAccessToken });
+  await authenticateClient(body);
+
   const brokerRes = await fetch(brokerTokenUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      token: keycloakAccessToken,
-    }),
+    body,
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
 

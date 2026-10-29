@@ -74,7 +74,7 @@ See the documentation [here](preprocessor/README.md) for further information.
 
 ### Frontend
 
-TypeScript/Express web app for selecting reports, triggering execution, and downloading generated output, with OIDC login.
+TypeScript/Express web app for selecting reports, triggering execution, and downloading generated output, with OIDC login (OAuth 2.1: Authorization Code + PKCE, signed-JWT client authentication).
 See [frontend/README.md](frontend/README.md) for details.
 
 ## Telemetry

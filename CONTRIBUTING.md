@@ -26,7 +26,8 @@ at your own Keycloak (or other OIDC-compliant provider) instance:
 
 ```sh
 cp frontend/.env.example frontend/.env
-# fill in OIDC_ISSUER_URL / OIDC_CLIENT_ID / (OIDC_CLIENT_SECRET if confidential) and AUTH_SESSION_SECRET
+# fill in OIDC_ISSUER_URL / OIDC_CLIENT_ID / OIDC_CLIENT_PRIVATE_KEY_FILE and AUTH_SESSION_SECRET
+# (see frontend/README.md#client-key-setup-keycloak for generating the key and configuring Keycloak)
 ```
 
 `local-report-executor`'s Docker image copies in a pre-built jar rather than building it itself

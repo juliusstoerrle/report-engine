@@ -114,7 +114,10 @@ export function createApp(services: AppServices, config: AppConfig, extraMiddlew
 
   extraMiddleware.forEach((middleware) => app.use(middleware));
 
-  app.use('/auth', createAuthRouter(services.authClient, config.auth, config.groups.hitobitoApiUrl));
+  app.use(
+    '/auth',
+    createAuthRouter(services.authClient, services.clientKey, config.auth, config.groups.hitobitoApiUrl),
+  );
 
   app.use('/', requireAuth, createReportExecutionRouter(services, config));
   app.use('/', requireAuth, createIndexRouter(services));

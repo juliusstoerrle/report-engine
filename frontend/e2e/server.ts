@@ -1,9 +1,11 @@
 import path from 'path';
+import { generateKeyPairSync } from 'crypto';
 import { createApp } from '../src/express-app';
 import { AppConfig } from '../src/config';
 import { AppServices } from '../src/composition-root';
 import { LocalMetadataLoaderService } from '../src/domain/adapter/local-metadata-loader.service';
 import { HttpReportExecutionService } from '../src/domain/adapter/http-report-execution.service';
+import { loadClientSigningKey } from '../src/auth/client-key';
 import { FakeGroupsService } from './fixtures/fake-groups.service';
 import { E2E_PRINCIPAL } from './fixtures/fake-principal';
 
@@ -48,7 +50,11 @@ async function main() {
       issuerUrl: 'http://oidc.invalid',
       backendHost: undefined,
       clientId: 'unused',
-      clientSecret: undefined,
+      // Throwaway per-run key - never sent anywhere, only published at /auth/jwks.
+      clientPrivateKey: generateKeyPairSync('ec', { namedCurve: 'P-256' })
+        .privateKey.export({ format: 'pem', type: 'pkcs8' })
+        .toString(),
+      clientKeyId: undefined,
       redirectUri: 'http://localhost/auth/callback',
       postLogoutRedirectUri: '/',
       sessionSecret: process.env.E2E_SESSION_SECRET ?? 'e2e-test-session-secret',
@@ -66,6 +72,7 @@ async function main() {
     // Never dereferenced: createAuthRouter only touches this inside /login, /callback, /logout
     // handlers, none of which this test flow reaches (see /__e2e-login below instead).
     authClient: {} as AppServices['authClient'],
+    clientKey: await loadClientSigningKey(config.auth.clientPrivateKey),
   };
 
   const app = createApp(services, config, [

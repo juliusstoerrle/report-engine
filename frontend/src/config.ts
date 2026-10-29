@@ -1,3 +1,5 @@
+import { readFileSync } from 'fs';
+
 export type MetadataSource = 'local' | 'remote';
 export type ReportDownloadMode = 'proxy' | 'direct';
 
@@ -35,7 +37,11 @@ export interface AppConfig {
     readonly issuerUrl: string;
     readonly backendHost: string | undefined;
     readonly clientId: string;
-    readonly clientSecret: string | undefined;
+    // PEM-encoded (PKCS#8 or SEC1/PKCS#1) RSA or EC P-256/P-384 private key used to sign
+    // private_key_jwt client assertions (see auth/client-key.ts) - replaces a client secret.
+    readonly clientPrivateKey: string;
+    // Optional "kid" for the client key; defaults to its RFC 7638 JWK thumbprint.
+    readonly clientKeyId: string | undefined;
     readonly redirectUri: string;
     readonly postLogoutRedirectUri: string;
     readonly sessionSecret: string;
@@ -73,6 +79,30 @@ function intEnv(name: string, fallback: number): number {
     throw new Error(`Environment variable ${name} must be an integer, got "${raw}"`);
   }
   return parsed;
+}
+
+// The key can be given inline (OIDC_CLIENT_PRIVATE_KEY) or, better for container secrets and
+// multi-line PEM, as a file path (OIDC_CLIENT_PRIVATE_KEY_FILE).
+function clientPrivateKeyFromEnv(env: NodeJS.ProcessEnv): string {
+  const inline = env.OIDC_CLIENT_PRIVATE_KEY || undefined;
+  const file = env.OIDC_CLIENT_PRIVATE_KEY_FILE || undefined;
+  if (inline && file) {
+    throw new Error('Set only one of OIDC_CLIENT_PRIVATE_KEY and OIDC_CLIENT_PRIVATE_KEY_FILE');
+  }
+  if (file) {
+    return readFileSync(file, 'utf8');
+  }
+  if (inline) {
+    // .env files and many secret stores can't hold real newlines - accept escaped "\n" too.
+    return inline.replace(/\\n/g, '\n');
+  }
+  if (env.OIDC_CLIENT_SECRET) {
+    throw new Error(
+      'OIDC_CLIENT_SECRET is no longer supported - the frontend authenticates with a signed JWT ' +
+        '(private_key_jwt). Set OIDC_CLIENT_PRIVATE_KEY_FILE or OIDC_CLIENT_PRIVATE_KEY instead.',
+    );
+  }
+  throw new Error('Missing required environment variable: OIDC_CLIENT_PRIVATE_KEY_FILE or OIDC_CLIENT_PRIVATE_KEY');
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -116,7 +146,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
       issuerUrl: requiredEnv('OIDC_ISSUER_URL'),
       backendHost: optionalEnv('OIDC_BACKEND_HOST'),
       clientId: requiredEnv('OIDC_CLIENT_ID'),
-      clientSecret: optionalEnv('OIDC_CLIENT_SECRET'),
+      clientPrivateKey: clientPrivateKeyFromEnv(env),
+      clientKeyId: optionalEnv('OIDC_CLIENT_KEY_ID'),
       redirectUri: requiredEnv('AUTH_REDIRECT_URI'),
       postLogoutRedirectUri: optionalEnv('AUTH_POST_LOGOUT_REDIRECT_URI') ?? '/',
       sessionSecret: requiredEnv('AUTH_SESSION_SECRET'),

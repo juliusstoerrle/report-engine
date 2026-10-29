@@ -8,12 +8,14 @@ import { LocalMetadataLoaderService } from './domain/adapter/local-metadata-load
 import { RemoteMetadataLoaderService } from './domain/adapter/remote-metadata-loader.service';
 import { HttpReportExecutionService } from './domain/adapter/http-report-execution.service';
 import { createOidcClient } from './auth/oidc-client';
+import { ClientSigningKey, loadClientSigningKey } from './auth/client-key';
 
 export interface AppServices {
   readonly groupsService: GroupsService;
   readonly metadataService: MetadataService;
   readonly reportExecutionService: ReportExecutionService;
   readonly authClient: Configuration;
+  readonly clientKey: ClientSigningKey;
 }
 
 export async function createServices(config: AppConfig): Promise<AppServices> {
@@ -36,7 +38,8 @@ export async function createServices(config: AppConfig): Promise<AppServices> {
     config.execution.apiToken,
   );
 
-  const authClient = await createOidcClient(config.auth);
+  const clientKey = await loadClientSigningKey(config.auth.clientPrivateKey, config.auth.clientKeyId);
+  const authClient = await createOidcClient(config.auth, clientKey);
 
-  return { groupsService, metadataService, reportExecutionService, authClient };
+  return { groupsService, metadataService, reportExecutionService, authClient, clientKey };
 }

@@ -9,3 +9,6 @@ e2e/.runtime/
 playwright-report/
 test-results/
 coverage/
+
+# OIDC client signing keys (OIDC_CLIENT_PRIVATE_KEY_FILE) - never commit or bake into the image
+*.pem
