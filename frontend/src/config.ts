@@ -37,7 +37,7 @@ export interface AppConfig {
     readonly issuerUrl: string;
     readonly backendHost: string | undefined;
     readonly clientId: string;
-    // PEM-encoded (PKCS#8 or SEC1/PKCS#1) RSA or EC P-256/P-384 private key used to sign
+    // PEM-encoded (PKCS#8 or SEC1) EC P-384 private key used to sign ES384
     // private_key_jwt client assertions (see auth/client-key.ts) - replaces a client secret.
     readonly clientPrivateKey: string;
     // Optional "kid" for the client key; defaults to its RFC 7638 JWK thumbprint.

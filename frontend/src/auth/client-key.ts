@@ -1,4 +1,4 @@
-import { createHash, createPrivateKey, createPublicKey, type KeyObject, type webcrypto } from 'crypto';
+import { createHash, createPrivateKey, createPublicKey, type webcrypto } from 'crypto';
 
 export interface ClientSigningKey {
   readonly privateKey: CryptoKey;
@@ -8,33 +8,15 @@ export interface ClientSigningKey {
   readonly publicJwk: webcrypto.JsonWebKey & { kid: string; alg: string; use: 'sig' };
 }
 
-// JWS algorithm and the matching WebCrypto import parameters, per supported key type/curve.
-// RSA keys use RS256 since it's the one RSA client-assertion algorithm every OAuth server
-// (Keycloak's "Signed JWT" authenticator included) accepts by default.
-function signingAlgorithm(key: KeyObject): { alg: string; webCrypto: RsaHashedImportParams | EcKeyImportParams } {
-  switch (key.asymmetricKeyType) {
-    case 'rsa':
-      return { alg: 'RS256', webCrypto: { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' } };
-    case 'ec': {
-      const curve = key.asymmetricKeyDetails?.namedCurve;
-      if (curve === 'prime256v1') {
-        return { alg: 'ES256', webCrypto: { name: 'ECDSA', namedCurve: 'P-256' } };
-      }
-      if (curve === 'secp384r1') {
-        return { alg: 'ES384', webCrypto: { name: 'ECDSA', namedCurve: 'P-384' } };
-      }
-      throw new Error(`Unsupported EC curve for the OIDC client key: ${curve}`);
-    }
-    default:
-      throw new Error(`Unsupported key type for the OIDC client key: ${key.asymmetricKeyType} (use RSA or EC)`);
-  }
-}
+// Only EC P-384 / ES384 is accepted: one fixed algorithm keeps this (and the Keycloak client's
+// "Signature algorithm" setting) unambiguous.
+const ALG = 'ES384';
+const CURVE = 'P-384';
 
 // RFC 7638 JWK thumbprint - a stable, content-derived kid, so rotating the key file
 // automatically yields a new kid without a separate setting to keep in sync.
 function jwkThumbprint(jwk: webcrypto.JsonWebKey): string {
-  const members =
-    jwk.kty === 'RSA' ? { e: jwk.e, kty: jwk.kty, n: jwk.n } : { crv: jwk.crv, kty: jwk.kty, x: jwk.x, y: jwk.y };
+  const members = { crv: jwk.crv, kty: jwk.kty, x: jwk.x, y: jwk.y };
   return createHash('sha256').update(JSON.stringify(members)).digest('base64url');
 }
 
@@ -45,16 +27,21 @@ function jwkThumbprint(jwk: webcrypto.JsonWebKey): string {
  */
 export async function loadClientSigningKey(pem: string, kid?: string): Promise<ClientSigningKey> {
   const keyObject = createPrivateKey(pem);
-  const { alg, webCrypto } = signingAlgorithm(keyObject);
+  if (keyObject.asymmetricKeyType !== 'ec' || keyObject.asymmetricKeyDetails?.namedCurve !== 'secp384r1') {
+    throw new Error(
+      `The OIDC client key must be an EC ${CURVE} key, got ${keyObject.asymmetricKeyType} ` +
+        `${keyObject.asymmetricKeyDetails?.namedCurve ?? ''}`.trim(),
+    );
+  }
   const privateKey = await crypto.subtle.importKey(
     'pkcs8',
     keyObject.export({ format: 'der', type: 'pkcs8' }),
-    webCrypto,
+    { name: 'ECDSA', namedCurve: CURVE },
     false,
     ['sign'],
   );
   const publicJwk = createPublicKey(keyObject).export({ format: 'jwk' });
   const resolvedKid = kid ?? jwkThumbprint(publicJwk);
 
-  return { privateKey, kid: resolvedKid, publicJwk: { ...publicJwk, kid: resolvedKid, alg, use: 'sig' } };
+  return { privateKey, kid: resolvedKid, publicJwk: { ...publicJwk, kid: resolvedKid, alg: ALG, use: 'sig' } };
 }

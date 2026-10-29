@@ -1,45 +1,40 @@
 import { createPublicKey, generateKeyPairSync, verify } from 'crypto';
 import { loadClientSigningKey } from './client-key';
 
-function pem(type: 'rsa' | 'ec', namedCurve?: string): string {
-  const { privateKey } =
-    type === 'rsa'
-      ? generateKeyPairSync('rsa', { modulusLength: 2048 })
-      : generateKeyPairSync('ec', { namedCurve: namedCurve! });
+function pem(privateKey: { export(options: { format: 'pem'; type: 'pkcs8' }): string | Buffer }): string {
   return privateKey.export({ format: 'pem', type: 'pkcs8' }).toString();
 }
 
-test.each([
-  ['rsa', undefined, 'RS256', 'RSA'],
-  ['ec', 'P-256', 'ES256', 'EC'],
-  ['ec', 'P-384', 'ES384', 'EC'],
-] as const)('derives alg and a public-only JWK from a %s %s key', async (type, curve, alg, kty) => {
-  const key = await loadClientSigningKey(pem(type, curve));
+const P384_PEM = pem(generateKeyPairSync('ec', { namedCurve: 'P-384' }).privateKey);
 
-  expect(key.publicJwk).toMatchObject({ kty, alg, use: 'sig', kid: key.kid });
+test('derives an ES384 public-only JWK with a thumbprint kid from a P-384 key', async () => {
+  const key = await loadClientSigningKey(P384_PEM);
+
+  expect(key.publicJwk).toMatchObject({ kty: 'EC', crv: 'P-384', alg: 'ES384', use: 'sig', kid: key.kid });
   expect(key.publicJwk).not.toHaveProperty('d');
   expect(key.kid).toMatch(/^[A-Za-z0-9_-]{43}$/);
 });
 
 test('uses an explicit kid when given', async () => {
-  const key = await loadClientSigningKey(pem('ec', 'P-256'), 'my-key-1');
+  const key = await loadClientSigningKey(P384_PEM, 'my-key-1');
   expect(key.kid).toBe('my-key-1');
   expect(key.publicJwk.kid).toBe('my-key-1');
 });
 
-test('rejects unsupported key types', async () => {
-  const { privateKey } = generateKeyPairSync('ed448');
-  await expect(loadClientSigningKey(privateKey.export({ format: 'pem', type: 'pkcs8' }).toString())).rejects.toThrow(
-    /Unsupported key type/,
-  );
+test.each([
+  ['an RSA key', () => generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey],
+  ['a P-256 key', () => generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey],
+  ['an Ed25519 key', () => generateKeyPairSync('ed25519').privateKey],
+])('rejects %s', async (_, generate) => {
+  await expect(loadClientSigningKey(pem(generate()))).rejects.toThrow(/must be an EC P-384 key/);
 });
 
 test('the private key signs what the published public JWK verifies', async () => {
-  const key = await loadClientSigningKey(pem('ec', 'P-256'));
+  const key = await loadClientSigningKey(P384_PEM);
   const data = Buffer.from('header.payload');
 
-  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, key.privateKey, data);
+  const signature = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-384' }, key.privateKey, data);
 
   const publicKey = createPublicKey({ key: key.publicJwk, format: 'jwk' });
-  expect(verify('sha256', data, { key: publicKey, dsaEncoding: 'ieee-p1363' }, Buffer.from(signature))).toBe(true);
+  expect(verify('sha384', data, { key: publicKey, dsaEncoding: 'ieee-p1363' }, Buffer.from(signature))).toBe(true);
 });

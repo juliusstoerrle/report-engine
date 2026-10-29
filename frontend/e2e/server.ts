@@ -51,7 +51,7 @@ async function main() {
       backendHost: undefined,
       clientId: 'unused',
       // Throwaway per-run key - never sent anywhere, only published at /auth/jwks.
-      clientPrivateKey: generateKeyPairSync('ec', { namedCurve: 'P-256' })
+      clientPrivateKey: generateKeyPairSync('ec', { namedCurve: 'P-384' })
         .privateKey.export({ format: 'pem', type: 'pkcs8' })
         .toString(),
       clientKeyId: undefined,

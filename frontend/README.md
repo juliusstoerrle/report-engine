@@ -18,10 +18,11 @@ provider) instance. Copy `.env.example` to `.env` and fill in `OIDC_ISSUER_URL`,
 
 ### Client key setup (Keycloak)
 
-1. Generate a key: `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out oidc-client-key.pem`
-   (RSA keys work too and sign with RS256) and point `OIDC_CLIENT_PRIVATE_KEY_FILE` at it.
-2. In the client's **Credentials** tab, set **Client Authenticator** to **Signed JWT** (signature algorithm
-   `ES256`/`RS256` to match the key, or "any").
+1. Generate an EC P-384 key (the only key type accepted; assertions are signed with ES384):
+   `openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-384 -out oidc-client-key.pem`, and point
+   `OIDC_CLIENT_PRIVATE_KEY_FILE` at it.
+2. In the client's **Credentials** tab, set **Client Authenticator** to **Signed JWT** and **Signature algorithm**
+   to `ES384`.
 3. In the client's **Keys** tab, enable **Use JWKS URL** and set it to `https://<frontend-host>/auth/jwks`, which
    publishes only the public key. (Alternatively, import the public key/certificate there by hand.)
 4. Remove the old `OIDC_CLIENT_SECRET` from the deployment — it is no longer read (startup fails with a pointer to
